@@ -57,6 +57,19 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        industrial: {
+          bg: "hsl(var(--industrial-bg))",
+          surface: "hsl(var(--industrial-surface))",
+          border: "hsl(var(--industrial-border))",
+        },
+        neon: {
+          blue: "hsl(var(--neon-blue))",
+          "blue-glow": "hsl(var(--neon-blue-glow))",
+        },
+        emerald: {
+          DEFAULT: "hsl(var(--emerald))",
+          glow: "hsl(var(--emerald-glow))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -80,10 +93,41 @@ export default {
             height: "0",
           },
         },
+        "glow-pulse": {
+          "0%, 100%": {
+            opacity: "1",
+          },
+          "50%": {
+            opacity: "0.5",
+          },
+        },
+        "slide-in-left": {
+          from: {
+            transform: "translateX(-100%)",
+            opacity: "0",
+          },
+          to: {
+            transform: "translateX(0)",
+            opacity: "1",
+          },
+        },
+        "slide-in-right": {
+          from: {
+            transform: "translateX(100%)",
+            opacity: "0",
+          },
+          to: {
+            transform: "translateX(0)",
+            opacity: "1",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
+        "slide-in-left": "slide-in-left 0.3s ease-out",
+        "slide-in-right": "slide-in-right 0.3s ease-out",
       },
     },
   },
