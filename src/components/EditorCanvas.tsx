@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from "react";
+import { useCallback, useState, useRef, forwardRef, useImperativeHandle } from "react";
 import {
   ReactFlow,
   Background,
@@ -7,6 +7,7 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Connection,
   type Node,
   type Edge,
@@ -14,8 +15,32 @@ import {
 import { motion } from "framer-motion";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { CustomNode } from "./CustomNode";
 import type { Asset } from "./types";
+import type { EdgeType } from "./FactoryEditor";
+
+const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
+  const nodeWidth = 220;
+  const nodeHeight = 100;
+  const horizontalSpacing = 300;
+  const verticalSpacing = 150;
+
+  const layoutedNodes = nodes.map((node, index) => {
+    const col = index % 4;
+    const row = Math.floor(index / 4);
+    
+    return {
+      ...node,
+      position: {
+        x: col * horizontalSpacing + 100,
+        y: row * verticalSpacing + 100,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges };
+};
 
 const nodeTypes = {
   custom: CustomNode,
@@ -25,17 +50,46 @@ interface EditorCanvasProps {
   onAssetSelect: (asset: Asset | null) => void;
   isSidebarCollapsed: boolean;
   onSidebarToggle: () => void;
+  showGrid: boolean;
+  edgeType: EdgeType;
+  isDarkTheme: boolean;
 }
 
-export const EditorCanvas = ({ onAssetSelect, isSidebarCollapsed, onSidebarToggle }: EditorCanvasProps) => {
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+export interface EditorCanvasRef {
+  undo: () => void;
+  redo: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetLayout: () => void;
+  uploadJSON: () => void;
+  downloadJSON: () => void;
+}
+
+export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
+  ({ onAssetSelect, isSidebarCollapsed, onSidebarToggle, showGrid, edgeType, isDarkTheme }, ref) => {
+    const reactFlowWrapper = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+    const [history, setHistory] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
+    const [currentStep, setCurrentStep] = useState(-1);
+    const { toast } = useToast();
+    const { zoomIn: rfZoomIn, zoomOut: rfZoomOut, fitView } = useReactFlow();
+
+  const saveToHistory = useCallback(() => {
+    const newHistory = history.slice(0, currentStep + 1);
+    newHistory.push({ nodes, edges });
+    setHistory(newHistory);
+    setCurrentStep(newHistory.length - 1);
+  }, [nodes, edges, history, currentStep]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params: Connection) => {
+      setEdges((eds) => addEdge({ ...params, type: edgeType, animated: true }, eds));
+      saveToHistory();
+    },
+    [setEdges, edgeType, saveToHistory]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -64,8 +118,9 @@ export const EditorCanvas = ({ onAssetSelect, isSidebarCollapsed, onSidebarToggl
       };
 
       setNodes((nds) => nds.concat(newNode));
+      saveToHistory();
     },
-    [reactFlowInstance, setNodes]
+    [reactFlowInstance, setNodes, saveToHistory]
   );
 
   const onNodeClick = useCallback(
@@ -76,8 +131,109 @@ export const EditorCanvas = ({ onAssetSelect, isSidebarCollapsed, onSidebarToggl
     [onAssetSelect]
   );
 
+  useImperativeHandle(ref, () => ({
+    undo: () => {
+      if (currentStep > 0) {
+        const prevState = history[currentStep - 1];
+        setNodes(prevState.nodes);
+        setEdges(prevState.edges);
+        setCurrentStep(currentStep - 1);
+        toast({ title: "Undo successful", description: "Reverted to previous state" });
+      }
+    },
+    redo: () => {
+      if (currentStep < history.length - 1) {
+        const nextState = history[currentStep + 1];
+        setNodes(nextState.nodes);
+        setEdges(nextState.edges);
+        setCurrentStep(currentStep + 1);
+        toast({ title: "Redo successful", description: "Restored next state" });
+      }
+    },
+    zoomIn: () => {
+      rfZoomIn({ duration: 300 });
+    },
+    zoomOut: () => {
+      rfZoomOut({ duration: 300 });
+    },
+    resetLayout: () => {
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(nodes, edges);
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
+      setTimeout(() => fitView({ duration: 500 }), 100);
+      toast({ title: "Layout reset", description: "Assets auto-arranged" });
+    },
+    uploadJSON: () => {
+      fileInputRef.current?.click();
+    },
+    downloadJSON: () => {
+      const data = {
+        nodes,
+        edges,
+        timestamp: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `factory-config-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Download complete", description: "Configuration saved successfully" });
+    },
+  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, toast]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+        
+        if (data.nodes && data.edges) {
+          setNodes(data.nodes);
+          setEdges(data.edges);
+          setTimeout(() => fitView({ duration: 500 }), 100);
+          toast({ title: "Upload successful", description: "Configuration loaded" });
+          saveToHistory();
+        } else {
+          toast({ 
+            title: "Invalid file", 
+            description: "JSON file must contain nodes and edges",
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        toast({ 
+          title: "Upload failed", 
+          description: "Invalid JSON file format",
+          variant: "destructive"
+        });
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
   return (
     <div ref={reactFlowWrapper} className="relative flex-1 h-full">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+      
       {isSidebarCollapsed && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -128,14 +284,16 @@ export const EditorCanvas = ({ onAssetSelect, isSidebarCollapsed, onSidebarToggl
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
-        className="bg-industrial-bg"
+        className={isDarkTheme ? "bg-industrial-bg" : "bg-gray-50"}
       >
-        <Background
-          color="hsl(var(--industrial-border))"
-          gap={20}
-          size={1}
-          className="opacity-30"
-        />
+        {showGrid && (
+          <Background
+            color={isDarkTheme ? "hsl(var(--industrial-border))" : "#e5e7eb"}
+            gap={20}
+            size={1}
+            className="opacity-30"
+          />
+        )}
         <Controls className="bg-card border-industrial-border" />
         <MiniMap
           className="bg-card/70 backdrop-blur-xl border border-industrial-border"
@@ -146,4 +304,6 @@ export const EditorCanvas = ({ onAssetSelect, isSidebarCollapsed, onSidebarToggl
       </ReactFlow>
     </div>
   );
-};
+});
+
+EditorCanvas.displayName = "EditorCanvas";
