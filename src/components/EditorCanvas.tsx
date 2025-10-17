@@ -11,12 +11,14 @@ import {
   type Connection,
   type Node,
   type Edge,
+  MarkerType,
 } from "@xyflow/react";
-import { motion } from "framer-motion";
-import { Menu } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Menu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CustomNode } from "./CustomNode";
+import { InsertNodeMenu } from "./InsertNodeMenu";
 import type { Asset } from "./types";
 import type { EdgeType } from "./FactoryEditor";
 
@@ -53,6 +55,7 @@ interface EditorCanvasProps {
   showGrid: boolean;
   edgeType: EdgeType;
   isDarkTheme: boolean;
+  onUsedAssetsChange?: (usedAssetIds: string[]) => void;
 }
 
 export interface EditorCanvasRef {
@@ -66,7 +69,7 @@ export interface EditorCanvasRef {
 }
 
 export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
-  ({ onAssetSelect, isSidebarCollapsed, onSidebarToggle, showGrid, edgeType, isDarkTheme }, ref) => {
+  ({ onAssetSelect, isSidebarCollapsed, onSidebarToggle, showGrid, edgeType, isDarkTheme, onUsedAssetsChange }, ref) => {
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -74,8 +77,19 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
     const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
     const [history, setHistory] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
     const [currentStep, setCurrentStep] = useState(-1);
+    const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+    const [showInsertMenu, setShowInsertMenu] = useState(false);
     const { toast } = useToast();
     const { zoomIn: rfZoomIn, zoomOut: rfZoomOut, fitView } = useReactFlow();
+
+    // Track used asset IDs and notify parent
+    const updateUsedAssets = useCallback((currentNodes: Node[]) => {
+      const usedAssetIds = currentNodes.map(node => {
+        const asset = node.data as unknown as Asset;
+        return asset.id;
+      });
+      onUsedAssetsChange?.(usedAssetIds);
+    }, [onUsedAssetsChange]);
 
   const saveToHistory = useCallback(() => {
     const newHistory = history.slice(0, currentStep + 1);
@@ -86,7 +100,21 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
 
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) => addEdge({ ...params, type: edgeType, animated: true }, eds));
+      setEdges((eds) => addEdge({ 
+        ...params, 
+        type: edgeType, 
+        animated: true,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+          color: 'hsl(var(--primary))',
+        },
+        style: {
+          strokeWidth: 2,
+          stroke: 'hsl(var(--primary))',
+        }
+      }, eds));
       saveToHistory();
     },
     [setEdges, edgeType, saveToHistory]
@@ -105,6 +133,22 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       if (!data) return;
 
       const asset: Asset = JSON.parse(data);
+      
+      // Check if asset is already used
+      const isUsed = nodes.some(node => {
+        const nodeAsset = node.data as unknown as Asset;
+        return nodeAsset.id === asset.id;
+      });
+
+      if (isUsed) {
+        toast({
+          title: "Asset already in use",
+          description: "Delete the existing node to reuse this asset",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const position = reactFlowInstance?.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -117,19 +161,56 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
         data: { ...asset },
       };
 
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds) => {
+        const updatedNodes = nds.concat(newNode);
+        updateUsedAssets(updatedNodes);
+        return updatedNodes;
+      });
       saveToHistory();
     },
-    [reactFlowInstance, setNodes, saveToHistory]
+    [reactFlowInstance, setNodes, saveToHistory, nodes, toast, updateUsedAssets]
   );
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       const asset = node.data as unknown as Asset;
       onAssetSelect(asset);
+      setSelectedEdge(null);
+      setShowInsertMenu(false);
     },
     [onAssetSelect]
   );
+
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      setSelectedEdge(edge);
+      setShowInsertMenu(true);
+      onAssetSelect(null);
+    },
+    [onAssetSelect]
+  );
+
+  const onPaneClick = useCallback(() => {
+    setSelectedEdge(null);
+    setShowInsertMenu(false);
+  }, []);
+
+  // Custom handler for node changes to track deletions
+  const handleNodesChange = useCallback((changes: any) => {
+    onNodesChange(changes);
+    
+    // Check if any nodes were removed
+    const hasRemoval = changes.some((change: any) => change.type === 'remove');
+    if (hasRemoval) {
+      // Update used assets after a brief delay to ensure state is updated
+      setTimeout(() => {
+        setNodes((currentNodes) => {
+          updateUsedAssets(currentNodes);
+          return currentNodes;
+        });
+      }, 0);
+    }
+  }, [onNodesChange, setNodes, updateUsedAssets]);
 
   useImperativeHandle(ref, () => ({
     undo: () => {
@@ -198,6 +279,7 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
         if (data.nodes && data.edges) {
           setNodes(data.nodes);
           setEdges(data.edges);
+          updateUsedAssets(data.nodes);
           setTimeout(() => fitView({ duration: 500 }), 100);
           toast({ title: "Upload successful", description: "Configuration loaded" });
           saveToHistory();
@@ -223,6 +305,85 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       event.target.value = '';
     }
   };
+
+  const handleInsertAsset = useCallback((asset: Asset) => {
+    if (!selectedEdge) return;
+
+    const sourceNode = nodes.find(n => n.id === selectedEdge.source);
+    const targetNode = nodes.find(n => n.id === selectedEdge.target);
+    
+    if (!sourceNode || !targetNode) return;
+
+    // Calculate position between source and target
+    const newPosition = {
+      x: (sourceNode.position.x + targetNode.position.x) / 2,
+      y: (sourceNode.position.y + targetNode.position.y) / 2,
+    };
+
+    const newNode: Node = {
+      id: `${asset.id}-${Date.now()}`,
+      type: "custom",
+      position: newPosition,
+      data: { ...asset },
+    };
+
+    // Remove old edge and create two new edges
+    setEdges((eds) => {
+      const filtered = eds.filter(e => e.id !== selectedEdge.id);
+      return [
+        ...filtered,
+        {
+          id: `e-${selectedEdge.source}-${newNode.id}`,
+          source: selectedEdge.source,
+          target: newNode.id,
+          type: edgeType,
+          animated: true,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+            color: 'hsl(var(--primary))',
+          },
+          style: {
+            strokeWidth: 2,
+            stroke: 'hsl(var(--primary))',
+          }
+        },
+        {
+          id: `e-${newNode.id}-${selectedEdge.target}`,
+          source: newNode.id,
+          target: selectedEdge.target,
+          type: edgeType,
+          animated: true,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+            color: 'hsl(var(--primary))',
+          },
+          style: {
+            strokeWidth: 2,
+            stroke: 'hsl(var(--primary))',
+          }
+        }
+      ];
+    });
+
+    setNodes((nds) => {
+      const updatedNodes = nds.concat(newNode);
+      updateUsedAssets(updatedNodes);
+      return updatedNodes;
+    });
+
+    setShowInsertMenu(false);
+    setSelectedEdge(null);
+    saveToHistory();
+    
+    toast({
+      title: "Asset inserted",
+      description: "Node added between connection"
+    });
+  }, [selectedEdge, nodes, setEdges, setNodes, edgeType, updateUsedAssets, saveToHistory, toast]);
 
   return (
     <div ref={reactFlowWrapper} className="relative flex-1 h-full">
@@ -274,14 +435,19 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
 
       <ReactFlow
         nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
+        edges={edges.map(edge => ({
+          ...edge,
+          className: selectedEdge?.id === edge.id ? 'selected-edge' : '',
+        }))}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onInit={setReactFlowInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         fitView
         className={isDarkTheme ? "bg-industrial-bg" : "bg-gray-50"}
@@ -302,6 +468,43 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
           }}
         />
       </ReactFlow>
+
+      {/* Insert Node Menu */}
+      <AnimatePresence>
+        {showInsertMenu && selectedEdge && (
+          <InsertNodeMenu
+            onInsertAsset={handleInsertAsset}
+            onClose={() => {
+              setShowInsertMenu(false);
+              setSelectedEdge(null);
+            }}
+            usedAssetIds={nodes.map(n => (n.data as unknown as Asset).id)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Insert Button on Selected Edge */}
+      {selectedEdge && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0 }}
+          className="absolute pointer-events-none"
+          style={{
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <Button
+            size="icon"
+            className="pointer-events-auto bg-primary hover:bg-primary/90 shadow-lg shadow-primary/50 animate-glow-pulse"
+            onClick={() => setShowInsertMenu(true)}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+        </motion.div>
+      )}
     </div>
   );
 });

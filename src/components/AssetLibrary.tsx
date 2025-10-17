@@ -7,9 +7,10 @@ import { assetGroups } from "./assetData";
 
 interface AssetLibraryProps {
   onCollapse: () => void;
+  usedAssetIds?: string[];
 }
 
-export const AssetLibrary = ({ onCollapse }: AssetLibraryProps) => {
+export const AssetLibrary = ({ onCollapse, usedAssetIds = [] }: AssetLibraryProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<string[]>(
     Object.keys(assetGroups)
@@ -85,7 +86,11 @@ export const AssetLibrary = ({ onCollapse }: AssetLibraryProps) => {
                 className="mt-2 space-y-2"
               >
                 {assets.map((asset) => (
-                  <AssetCard key={asset.id} asset={asset} />
+                  <AssetCard 
+                    key={asset.id} 
+                    asset={asset}
+                    isUsed={usedAssetIds.includes(asset.id)}
+                  />
                 ))}
               </motion.div>
             )}

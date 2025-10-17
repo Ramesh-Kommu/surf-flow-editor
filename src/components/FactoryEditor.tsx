@@ -17,6 +17,7 @@ export const FactoryEditor = () => {
   const [showGrid, setShowGrid] = useState(true);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [edgeType, setEdgeType] = useState<EdgeType>("default");
+  const [usedAssetIds, setUsedAssetIds] = useState<string[]>([]);
   const canvasRef = useRef<any>(null);
 
   return (
@@ -47,7 +48,10 @@ export const FactoryEditor = () => {
               transition={{ duration: 0.3, ease: "easeInOut" }}
               className="w-80 border-r border-industrial-border"
             >
-              <AssetLibrary onCollapse={() => setIsSidebarCollapsed(true)} />
+              <AssetLibrary 
+                onCollapse={() => setIsSidebarCollapsed(true)}
+                usedAssetIds={usedAssetIds}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -61,6 +65,7 @@ export const FactoryEditor = () => {
             showGrid={showGrid}
             edgeType={edgeType}
             isDarkTheme={isDarkTheme}
+            onUsedAssetsChange={setUsedAssetIds}
           />
         </ReactFlowProvider>
 

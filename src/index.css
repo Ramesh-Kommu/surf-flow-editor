@@ -129,4 +129,11 @@ All colors MUST be HSL.
   .industrial-gradient {
     background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--industrial-surface)) 100%);
   }
+
+  /* Selected Edge Styling */
+  .selected-edge {
+    stroke: hsl(var(--primary)) !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.6));
+  }
 }
