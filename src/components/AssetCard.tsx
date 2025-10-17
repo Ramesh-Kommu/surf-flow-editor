@@ -65,7 +65,7 @@ export const AssetCard = ({ asset, isUsed = false }: AssetCardProps) => {
             {cardContent}
           </TooltipTrigger>
           <TooltipContent>
-            <p>Already used in layout — delete existing node to reuse</p>
+            <p>Already used in layout — delete or undo to reuse</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

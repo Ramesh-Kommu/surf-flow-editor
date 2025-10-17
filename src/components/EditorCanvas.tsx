@@ -91,12 +91,18 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       onUsedAssetsChange?.(usedAssetIds);
     }, [onUsedAssetsChange]);
 
-  const saveToHistory = useCallback(() => {
+  // Debounced save to history to prevent spam during drag operations
+  const saveToHistoryDebounced = useCallback(() => {
     const newHistory = history.slice(0, currentStep + 1);
     newHistory.push({ nodes, edges });
     setHistory(newHistory);
     setCurrentStep(newHistory.length - 1);
   }, [nodes, edges, history, currentStep]);
+
+  // Immediate save for important actions
+  const saveToHistory = useCallback(() => {
+    saveToHistoryDebounced();
+  }, [saveToHistoryDebounced]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -195,22 +201,35 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
     setShowInsertMenu(false);
   }, []);
 
-  // Custom handler for node changes to track deletions
+  // Custom handler for node changes to track deletions and movements
   const handleNodesChange = useCallback((changes: any) => {
     onNodesChange(changes);
     
-    // Check if any nodes were removed
+    // Check if any nodes were removed or added
     const hasRemoval = changes.some((change: any) => change.type === 'remove');
+    const hasSelection = changes.some((change: any) => change.type === 'select');
+    const hasDimensions = changes.some((change: any) => change.type === 'dimensions');
+    
     if (hasRemoval) {
-      // Update used assets after a brief delay to ensure state is updated
+      // Update used assets after removal and save to history
       setTimeout(() => {
         setNodes((currentNodes) => {
           updateUsedAssets(currentNodes);
           return currentNodes;
         });
+        saveToHistory();
       }, 0);
     }
-  }, [onNodesChange, setNodes, updateUsedAssets]);
+    
+    // Don't save history for selection or dimension changes
+    if (!hasSelection && !hasDimensions && !hasRemoval) {
+      // For position changes, debounce to avoid spam
+      const hasPosition = changes.some((change: any) => change.type === 'position' && !change.dragging);
+      if (hasPosition) {
+        saveToHistory();
+      }
+    }
+  }, [onNodesChange, setNodes, updateUsedAssets, saveToHistory]);
 
   useImperativeHandle(ref, () => ({
     undo: () => {
@@ -218,8 +237,12 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
         const prevState = history[currentStep - 1];
         setNodes(prevState.nodes);
         setEdges(prevState.edges);
+        updateUsedAssets(prevState.nodes);
         setCurrentStep(currentStep - 1);
+        setTimeout(() => fitView({ duration: 300 }), 50);
         toast({ title: "Undo successful", description: "Reverted to previous state" });
+      } else {
+        toast({ title: "Nothing to undo", variant: "destructive" });
       }
     },
     redo: () => {
@@ -227,8 +250,12 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
         const nextState = history[currentStep + 1];
         setNodes(nextState.nodes);
         setEdges(nextState.edges);
+        updateUsedAssets(nextState.nodes);
         setCurrentStep(currentStep + 1);
+        setTimeout(() => fitView({ duration: 300 }), 50);
         toast({ title: "Redo successful", description: "Restored next state" });
+      } else {
+        toast({ title: "Nothing to redo", variant: "destructive" });
       }
     },
     zoomIn: () => {
@@ -242,6 +269,7 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
       setTimeout(() => fitView({ duration: 500 }), 100);
+      saveToHistory();
       toast({ title: "Layout reset", description: "Assets auto-arranged" });
     },
     uploadJSON: () => {
@@ -264,7 +292,7 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       URL.revokeObjectURL(url);
       toast({ title: "Download complete", description: "Configuration saved successfully" });
     },
-  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, toast]);
+  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, toast, updateUsedAssets, saveToHistory]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -280,9 +308,9 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
           setNodes(data.nodes);
           setEdges(data.edges);
           updateUsedAssets(data.nodes);
+          saveToHistory();
           setTimeout(() => fitView({ duration: 500 }), 100);
           toast({ title: "Upload successful", description: "Configuration loaded" });
-          saveToHistory();
         } else {
           toast({ 
             title: "Invalid file", 
