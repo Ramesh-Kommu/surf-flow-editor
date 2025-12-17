@@ -1,8 +1,10 @@
-import { Save, Undo, Redo, RotateCcw, Grid3x3, Moon, Sun, Upload, Download, ZoomIn, ZoomOut, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Save, Undo, Redo, RotateCcw, Grid3x3, Moon, Sun, Upload, Download, ZoomIn, ZoomOut, Trash2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import type { EdgeType } from "./FactoryEditor";
 
 interface EditorToolbarProps {
@@ -16,6 +18,7 @@ interface EditorToolbarProps {
   onUploadJSON: () => void;
   onDownloadJSON: () => void;
   onDeleteLink: () => void;
+  onSearch: (searchTerm: string) => void;
   showGrid: boolean;
   isDarkTheme: boolean;
   edgeType: EdgeType;
@@ -34,12 +37,35 @@ export const EditorToolbar = ({
   onUploadJSON,
   onDownloadJSON,
   onDeleteLink,
+  onSearch,
   showGrid,
   isDarkTheme,
   edgeType,
   onEdgeTypeChange,
   hasSelectedEdge,
 }: EditorToolbarProps) => {
+  const [showSearchInput, setShowSearchInput] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const handleSearch = () => {
+    if (searchTerm.trim()) {
+      onSearch(searchTerm.trim());
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    } else if (e.key === "Escape") {
+      setShowSearchInput(false);
+      setSearchTerm("");
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchTerm("");
+    setShowSearchInput(false);
+  };
   return (
     <TooltipProvider>
       <motion.header
@@ -58,6 +84,60 @@ export const EditorToolbar = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Search Section */}
+          <AnimatePresence mode="wait">
+            {showSearchInput ? (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 200, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center gap-1"
+              >
+                <Input
+                  autoFocus
+                  placeholder="Search asset..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="h-8 w-[160px] bg-card/50 border-industrial-border text-sm"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
+                  onClick={handleSearch}
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                  onClick={clearSearch}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </motion.div>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="hover:bg-primary/10 hover:text-primary"
+                    onClick={() => setShowSearchInput(true)}
+                  >
+                    <Search className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search & Focus Asset</TooltipContent>
+              </Tooltip>
+            )}
+          </AnimatePresence>
+
+          <div className="mx-2 h-6 w-px bg-industrial-border" />
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button 
