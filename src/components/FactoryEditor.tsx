@@ -18,10 +18,20 @@ export const FactoryEditor = () => {
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [edgeType, setEdgeType] = useState<EdgeType>("default");
   const [usedAssetIds, setUsedAssetIds] = useState<string[]>([]);
+  const [hasSelectedEdge, setHasSelectedEdge] = useState(false);
   const canvasRef = useRef<any>(null);
 
+  // Poll for selected edge state
+  const checkSelectedEdge = () => {
+    const hasEdge = canvasRef.current?.hasSelectedEdge?.() || false;
+    setHasSelectedEdge(hasEdge);
+  };
+
   return (
-    <div className={`flex h-screen w-full flex-col overflow-hidden ${isDarkTheme ? 'bg-industrial-bg' : 'bg-gray-50'}`}>
+    <div 
+      className={`flex h-screen w-full flex-col overflow-hidden ${isDarkTheme ? 'bg-industrial-bg' : 'bg-gray-50'}`}
+      onClick={checkSelectedEdge}
+    >
       <EditorToolbar 
         onUndo={() => canvasRef.current?.undo()}
         onRedo={() => canvasRef.current?.redo()}
@@ -32,10 +42,15 @@ export const FactoryEditor = () => {
         onThemeToggle={() => setIsDarkTheme(!isDarkTheme)}
         onUploadJSON={() => canvasRef.current?.uploadJSON()}
         onDownloadJSON={() => canvasRef.current?.downloadJSON()}
+        onDeleteLink={() => {
+          canvasRef.current?.deleteSelectedEdge();
+          setHasSelectedEdge(false);
+        }}
         showGrid={showGrid}
         isDarkTheme={isDarkTheme}
         edgeType={edgeType}
         onEdgeTypeChange={setEdgeType}
+        hasSelectedEdge={hasSelectedEdge}
       />
       
       <div className="flex flex-1 overflow-hidden">

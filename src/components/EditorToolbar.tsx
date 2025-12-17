@@ -1,4 +1,4 @@
-import { Save, Undo, Redo, RotateCcw, Grid3x3, Moon, Sun, Upload, Download, ZoomIn, ZoomOut } from "lucide-react";
+import { Save, Undo, Redo, RotateCcw, Grid3x3, Moon, Sun, Upload, Download, ZoomIn, ZoomOut, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,10 +15,12 @@ interface EditorToolbarProps {
   onThemeToggle: () => void;
   onUploadJSON: () => void;
   onDownloadJSON: () => void;
+  onDeleteLink: () => void;
   showGrid: boolean;
   isDarkTheme: boolean;
   edgeType: EdgeType;
   onEdgeTypeChange: (type: EdgeType) => void;
+  hasSelectedEdge: boolean;
 }
 
 export const EditorToolbar = ({
@@ -31,10 +33,12 @@ export const EditorToolbar = ({
   onThemeToggle,
   onUploadJSON,
   onDownloadJSON,
+  onDeleteLink,
   showGrid,
   isDarkTheme,
   edgeType,
   onEdgeTypeChange,
+  hasSelectedEdge,
 }: EditorToolbarProps) => {
   return (
     <TooltipProvider>
@@ -110,6 +114,21 @@ export const EditorToolbar = ({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Redo</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={`hover:bg-destructive/20 hover:text-destructive ${hasSelectedEdge ? 'text-destructive bg-destructive/10' : 'opacity-50 cursor-not-allowed'}`}
+                onClick={onDeleteLink}
+                disabled={!hasSelectedEdge}
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{hasSelectedEdge ? 'Delete Selected Link' : 'Select a link to delete'}</TooltipContent>
           </Tooltip>
 
           <div className="mx-2 h-6 w-px bg-industrial-border" />
