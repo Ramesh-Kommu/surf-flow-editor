@@ -14,7 +14,7 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, Plus } from "lucide-react";
+import { Menu, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CustomNode } from "./CustomNode";
@@ -413,6 +413,20 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
     });
   }, [selectedEdge, nodes, setEdges, setNodes, edgeType, updateUsedAssets, saveToHistory, toast]);
 
+  const handleDeleteEdge = useCallback(() => {
+    if (!selectedEdge) return;
+    
+    setEdges((eds) => eds.filter(e => e.id !== selectedEdge.id));
+    setSelectedEdge(null);
+    setShowInsertMenu(false);
+    saveToHistory();
+    
+    toast({
+      title: "Connection deleted",
+      description: "Link removed successfully"
+    });
+  }, [selectedEdge, setEdges, saveToHistory, toast]);
+
   return (
     <div ref={reactFlowWrapper} className="relative flex-1 h-full">
       <input
@@ -511,12 +525,12 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
         )}
       </AnimatePresence>
 
-      {/* Insert Button on Selected Edge */}
+      {/* Action Buttons on Selected Edge */}
       {selectedEdge && (
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          exit={{ scale: 0 }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
           className="absolute pointer-events-none"
           style={{
             top: '50%',
@@ -524,13 +538,26 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
             transform: 'translate(-50%, -50%)',
           }}
         >
-          <Button
-            size="icon"
-            className="pointer-events-auto bg-primary hover:bg-primary/90 shadow-lg shadow-primary/50 animate-glow-pulse"
-            onClick={() => setShowInsertMenu(true)}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
+          <div className="pointer-events-auto flex items-center gap-2 bg-card/90 backdrop-blur-sm rounded-lg p-2 border border-industrial-border shadow-lg">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 bg-primary/20 hover:bg-primary/40 text-primary"
+              onClick={() => setShowInsertMenu(true)}
+              title="Insert node"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 bg-destructive/20 hover:bg-destructive/40 text-destructive"
+              onClick={handleDeleteEdge}
+              title="Delete connection"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </motion.div>
       )}
     </div>

@@ -1,11 +1,23 @@
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps, useReactFlow } from "@xyflow/react";
 import * as Icons from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { Asset } from "./types";
 
-export const CustomNode = memo(({ data, selected }: NodeProps) => {
-  const asset = data as unknown as Asset;
+interface CustomNodeData extends Asset {
+  onDelete?: (nodeId: string) => void;
+}
+
+export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
+  const asset = data as unknown as CustomNodeData;
   const IconComponent = Icons[asset.icon as keyof typeof Icons] as React.ComponentType<{ className?: string }> || Icons.Box;
+  const { deleteElements } = useReactFlow();
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteElements({ nodes: [{ id }] });
+  };
 
   return (
     <div
@@ -21,6 +33,22 @@ export const CustomNode = memo(({ data, selected }: NodeProps) => {
         background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--industrial-surface)) 100%)",
       }}
     >
+      {/* Delete Button - appears on selection */}
+      <AnimatePresence>
+        {selected && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: -5 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: -5 }}
+            transition={{ duration: 0.15 }}
+            onClick={handleDelete}
+            className="absolute -top-3 -right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-lg hover:bg-destructive/90 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       <Handle
         type="target"
         position={Position.Left}
