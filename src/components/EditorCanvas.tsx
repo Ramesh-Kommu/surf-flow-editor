@@ -66,6 +66,8 @@ export interface EditorCanvasRef {
   resetLayout: () => void;
   uploadJSON: () => void;
   downloadJSON: () => void;
+  hasSelectedEdge: () => boolean;
+  deleteSelectedEdge: () => void;
 }
 
 export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
@@ -292,7 +294,16 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       URL.revokeObjectURL(url);
       toast({ title: "Download complete", description: "Configuration saved successfully" });
     },
-  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, toast, updateUsedAssets, saveToHistory]);
+    hasSelectedEdge: () => !!selectedEdge,
+    deleteSelectedEdge: () => {
+      if (!selectedEdge) return;
+      setEdges((eds) => eds.filter(e => e.id !== selectedEdge.id));
+      setSelectedEdge(null);
+      setShowInsertMenu(false);
+      saveToHistory();
+      toast({ title: "Connection deleted", description: "Link removed successfully" });
+    },
+  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, toast, updateUsedAssets, saveToHistory, selectedEdge]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
