@@ -46,6 +46,7 @@ export const FactoryEditor = () => {
           canvasRef.current?.deleteSelectedEdge();
           setHasSelectedEdge(false);
         }}
+        onSearch={(term) => canvasRef.current?.searchAndFocus(term)}
         showGrid={showGrid}
         isDarkTheme={isDarkTheme}
         edgeType={edgeType}

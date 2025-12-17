@@ -68,6 +68,7 @@ export interface EditorCanvasRef {
   downloadJSON: () => void;
   hasSelectedEdge: () => boolean;
   deleteSelectedEdge: () => void;
+  searchAndFocus: (searchTerm: string) => void;
 }
 
 export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
@@ -81,8 +82,9 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
     const [currentStep, setCurrentStep] = useState(-1);
     const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
     const [showInsertMenu, setShowInsertMenu] = useState(false);
+    const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
     const { toast } = useToast();
-    const { zoomIn: rfZoomIn, zoomOut: rfZoomOut, fitView } = useReactFlow();
+    const { zoomIn: rfZoomIn, zoomOut: rfZoomOut, fitView, setCenter } = useReactFlow();
 
     // Track used asset IDs and notify parent
     const updateUsedAssets = useCallback((currentNodes: Node[]) => {
@@ -303,7 +305,46 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       saveToHistory();
       toast({ title: "Connection deleted", description: "Link removed successfully" });
     },
-  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, toast, updateUsedAssets, saveToHistory, selectedEdge]);
+    searchAndFocus: (searchTerm: string) => {
+      const searchLower = searchTerm.toLowerCase();
+      const foundNode = nodes.find(node => {
+        const asset = node.data as unknown as Asset;
+        return asset.name.toLowerCase().includes(searchLower) || 
+               asset.type.toLowerCase().includes(searchLower) ||
+               asset.zone?.toLowerCase().includes(searchLower);
+      });
+
+      if (foundNode) {
+        // Clear previous highlight
+        setHighlightedNodeId(foundNode.id);
+        
+        // Zoom to the node with animation
+        const nodeWidth = 200;
+        const nodeHeight = 100;
+        setCenter(
+          foundNode.position.x + nodeWidth / 2,
+          foundNode.position.y + nodeHeight / 2,
+          { zoom: 1.5, duration: 500 }
+        );
+        
+        toast({ 
+          title: "Asset found", 
+          description: `Focused on: ${(foundNode.data as unknown as Asset).name}` 
+        });
+
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+          setHighlightedNodeId(null);
+        }, 3000);
+      } else {
+        toast({ 
+          title: "Asset not found", 
+          description: `No asset matches "${searchTerm}"`,
+          variant: "destructive"
+        });
+      }
+    },
+  }), [currentStep, history, nodes, edges, setNodes, setEdges, rfZoomIn, rfZoomOut, fitView, setCenter, toast, updateUsedAssets, saveToHistory, selectedEdge]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -487,7 +528,10 @@ export const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(
       )}
 
       <ReactFlow
-        nodes={nodes}
+        nodes={nodes.map(node => ({
+          ...node,
+          data: { ...node.data, isHighlighted: node.id === highlightedNodeId }
+        }))}
         edges={edges.map(edge => ({
           ...edge,
           className: selectedEdge?.id === edge.id ? 'selected-edge' : '',
